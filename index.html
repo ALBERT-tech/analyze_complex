@@ -752,47 +752,72 @@
         }
         
         // Функция для экспорта результатов в Excel
-        function exportToExcel() {
-            const resultTbody = document.getElementById('result-tbody');
-            const rows = resultTbody.querySelectorAll('tr');
-            
-            // Проверяем, есть ли результаты
-            if (rows.length === 0 || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) {
-                alert('Нет данных для экспорта');
-                return;
-            }
-            
-            // Собираем данные
-            const data = [['№', 'Заказчик (как в прошлом периоде)', 'Количество тендеров в прошлом периоде']];
-            
-            rows.forEach((row, index) => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length === 3) {
-                    data.push([
-                        cells[0].textContent,
-                        cells[1].textContent,
-                        parseInt(cells[2].textContent)
-                    ]);
-                }
-            });
-            
-            // Создаем рабочую книгу
-            const worksheet = XLSX.utils.aoa_to_sheet(data);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Результаты');
-            
-            // Форматируем ширину столбцов
-            const wscols = [
-                {wch: 5},   // №
-                {wch: 60},  // Заказчик
-                {wch: 25}   // Количество тендеров
-            ];
-            worksheet['!cols'] = wscols;
-            
-            // Сохраняем файл
-            const fileName = `Заказчики_отсутствующие_в_последних_годах_${new Date().toISOString().slice(0,10)}.xlsx`;
-            XLSX.writeFile(workbook, fileName);
+    function exportToExcel() {
+    const resultTbody = document.getElementById('result-tbody');
+    const rows = resultTbody.querySelectorAll('tr');
+
+    // Проверяем, есть ли результаты
+    if (rows.length === 0 || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+
+    // Собираем данные
+    const data = [['№', 'Заказчик (как в прошлом периоде)', 'Количество тендеров в прошлом периоде']];
+
+    rows.forEach((row) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length === 3) {
+            data.push([
+                String(cells[0].textContent || '').trim(),
+                String(cells[1].textContent || '').trim(),
+                Number.parseInt(String(cells[2].textContent || '').trim(), 10) || 0
+            ]);
         }
+    });
+
+    // Создаем лист
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+
+    // Явно задаём диапазон (некоторые сборки Excel меньше ругаются)
+    worksheet['!ref'] = XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: data.length - 1, c: data[0].length - 1 }
+    });
+
+    // Явно задаём типы ячеек (Excel меньше «угадывает» формат)
+    for (let R = 0; R < data.length; ++R) {
+        for (let C = 0; C < data[R].length; ++C) {
+            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = worksheet[addr];
+            if (!cell) continue;
+
+            if (R === 0) {
+                cell.t = 's'; // заголовки — строки
+            } else if (C === 2) {
+                cell.t = 'n'; // количество — число
+            } else {
+                cell.t = 's'; // остальное — строки
+            }
+        }
+    }
+
+    // Ширина столбцов
+    worksheet['!cols'] = [
+        { wch: 5 },   // №
+        { wch: 60 },  // Заказчик
+        { wch: 25 }   // Количество тендеров
+    ];
+
+    // Создаем рабочую книгу
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Результаты');
+
+    // Сохраняем файл
+    const fileName = `Заказчики_отсутствующие_в_последних_годах_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, fileName, { compression: true });
+}
+
         
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
