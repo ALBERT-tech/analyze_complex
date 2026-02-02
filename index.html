@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализ заказчиков по тендерам</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --light-color: #ecf0f1;
+            --success-color: #27ae60;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .file-upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: white;
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        .file-upload-area:hover, .file-upload-area.dragover {
+            border-color: var(--secondary-color);
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+        
+        .file-upload-area i {
+            font-size: 48px;
+            color: var(--secondary-color);
+            margin-bottom: 15px;
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary-color);
+            border: none;
+            padding: 10px 25px;
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-success {
+            background-color: var(--success-color);
+            border: none;
+            padding: 10px 25px;
+            font-weight: 600;
+        }
+        
+        .result-table {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .table th {
+            background-color: var(--primary-color);
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+        
+        .stat-box {
+            background-color: white;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+        }
+        
+        .stat-box h3 {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-box p {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-bottom: 0;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--secondary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        
+        footer {
+            margin-top: 30px;
+            padding: 20px 0;
+            color: #7f8c8d;
+            border-top: 1px solid #eee;
+        }
+        
+        .file-info {
+            background-color: rgba(52, 152, 219, 0.1);
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: var(--secondary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .normalization-example {
+            background-color: #f8f9fa;
+            border-left: 4px solid var(--secondary-color);
+            padding: 10px 15px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1><i class="fas fa-chart-line"></i> Анализ заказчиков по тендерам</h1>
+            <p class="lead">Сравнение заказчиков прошлого периода с последними годами</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title"><i class="fas fa-upload"></i> Загрузка файлов</h4>
+                        <p class="card-text">Загрузите два Excel-файла для сравнения заказчиков</p>
+                        
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h6>Файл прошлого периода</h6>
+                                <p>Заказчики в столбце J (индекс 9)</p>
+                                <div class="file-upload-area" id="upload-area-1">
+                                    <i class="fas fa-file-excel"></i>
+                                    <h5>Перетащите файл прошлого периода или нажмите для выбора</h5>
+                                    <p class="text-muted">Поддерживается формат .xlsx, .xls, .csv</p>
+                                    <button class="btn btn-outline-primary">Выбрать файл</button>
+                                    <input type="file" id="file-input-1" accept=".xlsx,.xls,.csv" style="display: none;">
+                                    <div id="file-info-1" class="file-info"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h6>Файл последних лет</h6>
+                                <p>Заказчики в столбце I (индекс 8)</p>
+                                <div class="file-upload-area" id="upload-area-2">
+                                    <i class="fas fa-file-excel"></i>
+                                    <h5>Перетащите файл последних лет или нажмите для выбора</h5>
+                                    <p class="text-muted">Поддерживается формат .xlsx, .xls, .csv</p>
+                                    <button class="btn btn-outline-primary">Выбрать файл</button>
+                                    <input type="file" id="file-input-2" accept=".xlsx,.xls,.csv" style="display: none;">
+                                    <div id="file-info-2" class="file-info"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h6>Запуск анализа</h6>
+                                <p>После загрузки обоих файлов запустите анализ</p>
+                                <button id="analyze-btn" class="btn btn-primary" disabled>
+                                    <i class="fas fa-play-circle"></i> Запустить анализ
+                                </button>
+                                <div class="loading" id="loading">
+                                    <div class="spinner"></div>
+                                    <p>Обработка файлов... Пожалуйста, подождите</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-table" id="result-section" style="display: none;">
+                    <h4><i class="fas fa-table"></i> Результаты анализа</h4>
+                    <p>Заказчики, которые есть в прошлом периоде, но отсутствуют в последних годах</p>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="stat-box">
+                                <h3 id="total-customers">0</h3>
+                                <p>Всего заказчиков</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-box">
+                                <h3 id="total-tenders">0</h3>
+                                <p>Всего тендеров</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-box">
+                                <h3 id="missing-customers">0</h3>
+                                <p>Отсутствуют в последних годах</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="result-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Заказчик (как в прошлом периоде)</th>
+                                    <th>Количество тендеров в прошлом периоде</th>
+                                </tr>
+                            </thead>
+                            <tbody id="result-tbody">
+                                <!-- Данные будут вставлены сюда -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button id="export-btn" class="btn btn-success mt-3">
+                        <i class="fas fa-download"></i> Экспорт в Excel
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title"><i class="fas fa-info-circle"></i> Инструкция</h4>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                <div>Загрузите два Excel-файла: за прошлый период и за последние годы</div>
+                            </li>
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                <div>В файле прошлого периода заказчики находятся в столбце J (индекс 9)</div>
+                            </li>
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                <div>В файле последних лет заказчики находятся в столбце I (индекс 8)</div>
+                            </li>
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                <div>При сравнении удаляются формы собственности (ООО, АО, ПАО и т.д.) из начала названия</div>
+                            </li>
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                <div>Также удаляются кавычки и пробелы по краям для сравнения</div>
+                            </li>
+                            <li class="list-group-item d-flex align-items-start">
+                                <i class="fas fa-check-circle text-success me-2 mt-1"></i>
+                                <div>В результатах отображаются исходные названия из прошлого периода</div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h4 class="card-title"><i class="fas fa-cogs"></i> Обработка данных</h4>
+                        <p>При сравнении названий заказчиков система выполняет:</p>
+                        <ul>
+                            <li>Удаление форм собственности (ООО, АО, ЗАО, ПАО, ИП и т.д.)</li>
+                            <li>Удаление полных названий форм собственности (Акционерное общество, Общество с ограниченной ответственностью и т.д.)</li>
+                            <li>Удаление кавычек (" ") и апострофов (' ')</li>
+                            <li>Удаление лишних пробелов по краям</li>
+                            <li>Приведение к нижнему регистру для сравнения</li>
+                        </ul>
+                        
+                        <div class="normalization-example">
+                            <strong>Примеры нормализации:</strong><br>
+                            1. <samp>"ООО 'Ромашка'"</samp> → <samp>"ромашка"</samp><br>
+                            2. <samp>АО "Солнышко"</samp> → <samp>"солнышко"</samp><br>
+                            3. <samp>Акционерное общество "Энергия"</samp> → <samp>"энергия"</samp><br>
+                            4. <samp>Публичное акционерное общество "Лукойл"</samp> → <samp>"лукойл"</samp><br>
+                            5. <samp>ИП Иванов И.И.</samp> → <samp>"иванов и.и."</samp>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center">
+            <p>Анализ заказчиков по тендерам &copy; 2023</p>
+            <p class="text-muted small">Для корректной работы приложения используйте файлы Excel с указанными столбцами</p>
+        </footer>
+    </div>
+
+    <script>
+        // Переменные для хранения данных
+        let pastPeriodData = null;
+        let recentYearsData = null;
+        let pastPeriodFileName = '';
+        let recentYearsFileName = '';
+        
+        // Функция для нормализации названия заказчика
+        // Цель: привести строки к максимально сопоставимому виду и убрать «шум»
+        // (организационно-правовые формы, кавычки, пунктуацию, разные пробелы, смешение латиницы/кириллицы).
+        function normalizeCustomerName(name) {
+            if (name === null || name === undefined) return '';
+
+            // 1) Базовая подготовка
+            let s = String(name);
+
+            // Нормализация Unicode (часть Excel-артефактов и неразрывных пробелов)
+            if (s.normalize) s = s.normalize('NFKC');
+            s = s.replace(/\u00A0/g, ' '); // NBSP
+            s = s.trim().toLowerCase();
+            if (!s) return '';
+
+            // 2) Смешение латиницы/кириллицы (визуально одинаковые буквы)
+            // Делать ДО удаления пунктуации, чтобы «ао/ao» тоже схлопывались.
+            s = s.replace(/[aceopxy]/g, ch => ({ a: 'а', c: 'с', e: 'е', o: 'о', p: 'р', x: 'х', y: 'у' }[ch] || ch));
+
+            // 3) Кавычки/апострофы → пробел
+            s = s.replace(/["'«»`]/g, ' ');
+
+            // 4) Любая пунктуация/символы → пробел (скобки, точки, запятые, тире и т.п.)
+            // Это критично для кейсов типа:
+            //   «...имени м.в.хруничева» vs «...имени м.в. хруничева»
+            //   «северсталь-...» vs «северсталь (...)»
+            //   «г.екатеринбург» vs «г. екатеринбург»
+            s = s.replace(/[\p{P}\p{S}]+/gu, ' ');
+
+            // 5) Схлопываем пробелы
+            s = s.replace(/\s+/g, ' ').trim();
+            if (!s) return '';
+
+            // 6) Удаляем ОПФ/формы собственности только в НАЧАЛЕ строки.
+            // Важно: формы предварительно нормализуем тем же способом (без пунктуации и лишних пробелов).
+            const ownershipForms = [
+                // Аббревиатуры и частые формы для заказчиков/поставщиков
+                'ооо', 'ао', 'пао', 'зао', 'оао', 'нао', 'ип',
+                'нко', 'гку', 'мбу', 'кгу', 'фку', 'гбу', 'мку',
+                'мау', 'ау', 'чу',
+                'фгбу', 'фгаоу', 'фгбоу', 'фгку', 'фгуп',
+                'мо', 'го',
+
+                // Полные варианты (и падежные формы)
+                'общество с ограниченной ответственностью',
+                'общества с ограниченной ответственностью',
+                'акционерное общество',
+                'акционерного общества',
+                'публичное акционерное общество',
+                'публичного акционерного общества',
+                'закрытое акционерное общество',
+                'закрытого акционерного общества',
+                'открытое акционерное общество',
+                'открытого акционерного общества',
+                'непубличное акционерное общество',
+                'непубличного акционерного общества',
+                'индивидуальный предприниматель',
+                'индивидуального предпринимателя',
+                'некоммерческая организация',
+                'некоммерческой организации',
+
+                // Учреждения (часто встречаются в закупках)
+                'федеральное казенное учреждение',
+                'федерального казенного учреждения',
+                'государственное казенное учреждение',
+                'государственного казенного учреждения',
+                'муниципальное казенное учреждение',
+                'муниципального казенного учреждения',
+                'государственное бюджетное учреждение',
+                'государственного бюджетного учреждения',
+                'муниципальное бюджетное учреждение',
+                'муниципального бюджетного учреждения',
+                'автономное учреждение',
+                'автономного учреждения',
+                'муниципальное автономное учреждение',
+                'муниципального автономного учреждения',
+                'государственное автономное учреждение',
+                'государственного автономного учреждения',
+
+                // Прочее
+                'государственное унитарное предприятие',
+                'федеральное государственное унитарное предприятие',
+                'государственной корпорации',
+                'государственная корпорация'
+            ];
+
+            const normalizeForm = (v) => {
+                let t = String(v);
+                if (t.normalize) t = t.normalize('NFKC');
+                t = t.replace(/\u00A0/g, ' ').toLowerCase();
+                t = t.replace(/[aceopxy]/g, ch => ({ a: 'а', c: 'с', e: 'е', o: 'о', p: 'р', x: 'х', y: 'у' }[ch] || ch));
+                t = t.replace(/["'«»`]/g, ' ');
+                t = t.replace(/[\p{P}\p{S}]+/gu, ' ');
+                t = t.replace(/\s+/g, ' ').trim();
+                return t;
+            };
+
+            const formsNorm = ownershipForms
+                .map(normalizeForm)
+                .filter(Boolean)
+                // Длинные — первыми, чтобы не отрезать «акционерное общество» по «ао»
+                .sort((a, b) => b.length - a.length);
+
+            // Удаляем формы собственности в начале, возможно несколько подряд
+            // (например: «федеральное государственное бюджетное учреждение ...»)
+            let changed = true;
+            while (changed) {
+                changed = false;
+                for (const f of formsNorm) {
+                    if (s === f) {
+                        s = '';
+                        changed = true;
+                        break;
+                    }
+                    if (s.startsWith(f + ' ')) {
+                        s = s.slice(f.length).trim();
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            // Финальная чистка пробелов
+            s = s.replace(/\s+/g, ' ').trim();
+            return s;
+        }
+        
+        // Функция для чтения Excel файла
+        function readExcelFile(file, columnIndex, callback) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // Берем первый лист
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Преобразуем в JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    // Извлекаем данные из указанного столбца
+                    const columnData = [];
+                    for (let i = 0; i < jsonData.length; i++) {
+                        if (jsonData[i] && jsonData[i][columnIndex] !== undefined) {
+                            const value = jsonData[i][columnIndex];
+                            // Пропускаем пустые значения
+                            if (value !== null && value !== '' && value !== undefined) {
+                                columnData.push(String(value).trim());
+                            }
+                        }
+                    }
+                    
+                    callback(null, columnData);
+                } catch (error) {
+                    callback(error, null);
+                }
+            };
+            
+            reader.onerror = function() {
+                callback(new Error('Ошибка чтения файла'), null);
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+        
+        // Функция для отображения информации о файле
+        function displayFileInfo(file, elementId) {
+            const fileInfo = document.getElementById(elementId);
+            fileInfo.innerHTML = `
+                <strong>${file.name}</strong><br>
+                Размер: ${(file.size / 1024).toFixed(2)} КБ<br>
+                Тип: ${file.type || 'Неизвестно'}
+            `;
+        }
+        
+        // Функция для настройки области загрузки файлов
+        function setupFileUpload(uploadAreaId, fileInputId, fileInfoId, onFileLoaded) {
+            const uploadArea = document.getElementById(uploadAreaId);
+            const fileInput = document.getElementById(fileInputId);
+            const fileInfo = document.getElementById(fileInfoId);
+            
+            // Клик по области загрузки
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // Клик по кнопке выбора файла
+            uploadArea.querySelector('button').addEventListener('click', function(e) {
+                e.stopPropagation();
+                fileInput.click();
+            });
+            
+            // Изменение выбранного файла
+            fileInput.addEventListener('change', function(e) {
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    displayFileInfo(file, fileInfoId);
+                    onFileLoaded(file);
+                }
+            });
+            
+            // Drag and drop
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                
+                if (e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    
+                    // Проверяем расширение файла
+                    const validExtensions = ['.xlsx', '.xls', '.csv'];
+                    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+                    
+                    if (validExtensions.includes(fileExtension)) {
+                        // Устанавливаем файл в input
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        fileInput.files = dataTransfer.files;
+                        
+                        displayFileInfo(file, fileInfoId);
+                        onFileLoaded(file);
+                    } else {
+                        alert('Пожалуйста, выберите файл Excel (.xlsx, .xls, .csv)');
+                    }
+                }
+            });
+        }
+        
+        // Функция для активации/деактивации кнопки анализа
+        function updateAnalyzeButton() {
+            const analyzeBtn = document.getElementById('analyze-btn');
+            analyzeBtn.disabled = !(pastPeriodData && recentYearsData);
+        }
+        
+        // Функция для анализа данных
+        function analyzeData() {
+            if (!pastPeriodData || !recentYearsData) {
+                alert('Пожалуйста, загрузите оба файла перед анализом');
+                return;
+            }
+            
+            // Показываем индикатор загрузки
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('analyze-btn').disabled = true;
+            
+            // Имитация обработки для демонстрации (в реальном приложении это не нужно)
+            setTimeout(() => {
+                performAnalysis();
+            }, 500);
+        }
+        
+        // Функция для выполнения анализа
+        function performAnalysis() {
+            try {
+                // Создаем Set нормализованных названий заказчиков из последних лет
+                const recentYearsNormalized = new Set();
+                for (const customer of recentYearsData) {
+                    const normalized = normalizeCustomerName(customer);
+                    if (normalized) {
+                        recentYearsNormalized.add(normalized);
+                    }
+                }
+                
+                // Считаем количество тендеров для каждого заказчика в прошлом периоде
+                const customerCounts = {};
+                const originalNames = {};
+                
+                for (const customer of pastPeriodData) {
+                    const normalized = normalizeCustomerName(customer);
+                    
+                    if (normalized) {
+                        // Сохраняем оригинальное название (первое встреченное)
+                        if (!originalNames[normalized]) {
+                            originalNames[normalized] = customer;
+                        }
+                        
+                        // Увеличиваем счетчик
+                        customerCounts[normalized] = (customerCounts[normalized] || 0) + 1;
+                    }
+                }
+                
+                // Находим заказчиков, которые есть в прошлом периоде, но отсутствуют в последних годах
+                const missingCustomers = [];
+                
+                for (const [normalizedName, count] of Object.entries(customerCounts)) {
+                    if (!recentYearsNormalized.has(normalizedName)) {
+                        missingCustomers.push({
+                            name: originalNames[normalizedName],
+                            count: count
+                        });
+                    }
+                }
+                
+                // Сортируем по количеству тендеров (по убыванию)
+                missingCustomers.sort((a, b) => b.count - a.count);
+                
+                // Отображаем результаты
+                displayResults(missingCustomers);
+                
+                // Скрываем индикатор загрузки
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('analyze-btn').disabled = false;
+                
+            } catch (error) {
+                alert('Произошла ошибка при анализе данных: ' + error.message);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('analyze-btn').disabled = false;
+            }
+        }
+        
+        // Функция для отображения результатов
+        function displayResults(missingCustomers) {
+            const resultSection = document.getElementById('result-section');
+            const resultTbody = document.getElementById('result-tbody');
+            
+            // Очищаем предыдущие результаты
+            resultTbody.innerHTML = '';
+            
+            if (missingCustomers.length === 0) {
+                resultTbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="text-center">
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i> Все заказчики из прошлого периода найдены в последних годах
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                // Заполняем таблицу результатами
+                missingCustomers.forEach((customer, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${customer.name}</td>
+                        <td>${customer.count}</td>
+                    `;
+                    resultTbody.appendChild(row);
+                });
+            }
+            
+            // Обновляем статистику
+            document.getElementById('total-customers').textContent = pastPeriodData ? pastPeriodData.length : 0;
+            
+            // Считаем общее количество тендеров в прошлом периоде
+            const totalTenders = pastPeriodData ? pastPeriodData.length : 0;
+            document.getElementById('total-tenders').textContent = totalTenders;
+            
+            document.getElementById('missing-customers').textContent = missingCustomers.length;
+            
+            // Показываем секцию с результатами
+            resultSection.style.display = 'block';
+            
+            // Прокручиваем к результатам
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Функция для экспорта результатов в Excel
+        function exportToExcel() {
+            const resultTbody = document.getElementById('result-tbody');
+            const rows = resultTbody.querySelectorAll('tr');
+            
+            // Проверяем, есть ли результаты
+            if (rows.length === 0 || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+            
+            // Собираем данные
+            const data = [['№', 'Заказчик (как в прошлом периоде)', 'Количество тендеров в прошлом периоде']];
+            
+            rows.forEach((row, index) => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length === 3) {
+                    data.push([
+                        cells[0].textContent,
+                        cells[1].textContent,
+                        parseInt(cells[2].textContent)
+                    ]);
+                }
+            });
+            
+            // Создаем рабочую книгу
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Результаты');
+            
+            // Форматируем ширину столбцов
+            const wscols = [
+                {wch: 5},   // №
+                {wch: 60},  // Заказчик
+                {wch: 25}   // Количество тендеров
+            ];
+            worksheet['!cols'] = wscols;
+            
+            // Сохраняем файл
+            const fileName = `Заказчики_отсутствующие_в_последних_годах_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+        }
+        
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            // Настраиваем загрузку файла прошлого периода
+            setupFileUpload(
+                'upload-area-1',
+                'file-input-1',
+                'file-info-1',
+                function(file) {
+                    pastPeriodFileName = file.name;
+                    readExcelFile(file, 9, function(error, data) { // Столбец J (индекс 9)
+                        if (error) {
+                            alert('Ошибка при чтении файла прошлого периода: ' + error.message);
+                            return;
+                        }
+                        pastPeriodData = data;
+                        updateAnalyzeButton();
+                    });
+                }
+            );
+            
+            // Настраиваем загрузку файла последних лет
+            setupFileUpload(
+                'upload-area-2',
+                'file-input-2',
+                'file-info-2',
+                function(file) {
+                    recentYearsFileName = file.name;
+                    readExcelFile(file, 8, function(error, data) { // Столбец I (индекс 8)
+                        if (error) {
+                            alert('Ошибка при чтении файла последних лет: ' + error.message);
+                            return;
+                        }
+                        recentYearsData = data;
+                        updateAnalyzeButton();
+                    });
+                }
+            );
+            
+            // Настраиваем кнопку анализа
+            document.getElementById('analyze-btn').addEventListener('click', analyzeData);
+            
+            // Настраиваем кнопку экспорта
+            document.getElementById('export-btn').addEventListener('click', exportToExcel);
+            
+            // Пример данных для демонстрации (можно удалить в рабочей версии)
+            // setupDemoData(); // отключено в рабочей версии
+            
+        });
+        
+        // Функция для создания демонстрационных данных (для примера)
+        function setupDemoData() {
+            // Создаем демонстрационные данные, если нужно протестировать без загрузки файлов
+            // В рабочей версии эту функцию можно удалить
+            
+            // Пример данных прошлого периода
+            const demoPastPeriod = [
+                'ООО "Ромашка"',
+                'АО "Солнышко"',
+                'ПАО "Лукоил"',
+                'ИП Иванов И.И.',
+                'ЗАО "Весна"',
+                'ООО "ТехноПром"',
+                'ГКУ "Центр развития"',
+                'НКО "Фонд помощи"',
+                'МБУ "СпортКомплекс"',
+                'АО "Энергосбыт"',
+                'ООО "Ромашка"', // Дубликат для проверки подсчета
+                'ИП Петров П.П.',
+                'ООО "СтройГарант"',
+                'АО "НефтеГаз"',
+                'ООО "ТехноПром"', // Еще один дубликат
+                'Акционерное общество "Металлург"',
+                'Общество с ограниченной ответственностью "Строймаш"',
+                'Публичное акционерное общество "Транснефть"',
+                'Муниципальное бюджетное учреждение "Культура"',
+                'Индивидуальный предприниматель Сидоров С.С.'
+            ];
+            
+            // Пример данных последних лет
+            const demoRecentYears = [
+                'АО "Солнышко"',
+                'ПАО "Лукоил"',
+                'ООО "ТехноПром"',
+                'ГКУ "Центр развития"',
+                'АО "Энергосбыт"',
+                'ИП Сидоров С.С.',
+                'ООО "Новые технологии"',
+                'АО "ТрансНефть"',
+                'Публичное акционерное общество "Транснефть"',
+                'Муниципальное бюджетное учреждение "Культура"'
+            ];
+            
+            // Для демонстрации предзаполняем информацию о файлах
+            document.getElementById('file-info-1').innerHTML = `
+                <strong>пример_прошлый_период.xlsx</strong><br>
+                Размер: 45.25 КБ<br>
+                Тип: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+            `;
+            
+            document.getElementById('file-info-2').innerHTML = `
+                <strong>пример_последние_годы.xlsx</strong><br>
+                Размер: 38.75 КБ<br>
+                Тип: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+            `;
+            
+            // Сохраняем демо-данные
+            pastPeriodData = demoPastPeriod;
+            recentYearsData = demoRecentYears;
+            
+            // Активируем кнопку анализа
+            updateAnalyzeButton();
+            
+            // Добавляем сообщение о демо-данных
+            const demoAlert = document.createElement('div');
+            demoAlert.className = 'alert alert-info mt-3';
+            demoAlert.innerHTML = `
+                <i class="fas fa-info-circle"></i> Загружены демонстрационные данные. 
+                Для работы с вашими файлами загрузите их с помощью формы выше.
+            `;
+            document.querySelector('.card-body').appendChild(demoAlert);
+        }
+    </script>
+</body>
+</html>
